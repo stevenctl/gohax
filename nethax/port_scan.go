@@ -2,7 +2,7 @@ package nethax
 
 import (
 	"fmt"
-	"github.com/stevenctl/gohax/pipeline"
+	"github.com/stevenctl/gohax/internal/pipeline"
 	"net"
 	"strconv"
 )
