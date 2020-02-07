@@ -11,30 +11,53 @@ const (
 	maxPort = 65535
 )
 
+// ScanPortsOption allows option funcs to set scanPortsOptions values
+type ScanPortsOption interface {
+	setScanPortsOption(options *scanPortsOptions)
+}
 
-// scan port checks if
-func scanPorts(host string, ports <-chan int) <- chan int {
+type scanPortsOptions struct {
+	goroutines int
+	verbose    bool
+}
+
+func defaultScanPortsOptions() *scanPortsOptions {
+	return &scanPortsOptions{
+		goroutines: 128,
+		verbose:    false,
+	}
+}
+
+// ScanPorts will find all open ports on a host
+func ScanPorts(host string, options ...ScanPortsOption) <-chan int {
+	opts := defaultScanPortsOptions()
+	for _, opt := range options {
+		opt.setScanPortsOption(opts)
+	}
+
+	allPorts := pipeline.Ints(1, maxPort)
+	foundPorts := make([]<-chan int, 128)
+	for i := 0; i < 128; i++ {
+		foundPorts[i] = scanPorts(host, allPorts, opts.EagerPrint)
+	}
+	return pipeline.MergeInts(foundPorts...)
+}
+
+func scanPorts(host string, ports <-chan int, print bool) <-chan int {
 	out := make(chan int)
 	go func() {
 		for port := range ports {
-			fmt.Printf("checking %d\n", port)
-			conn, err := net.Dial("tcp", host + ":" + strconv.Itoa(port))
+			conn, err := net.Dial("tcp", host+":"+strconv.Itoa(port))
 			if err != nil {
 				continue
 			}
 			_ = conn.Close()
+			if print {
+				fmt.Println(port)
+			}
 			out <- port
 		}
 		close(out)
 	}()
 	return out
-}
-
-func ScanPorts(host string) <- chan int {
-	allPorts := pipeline.Ints(1, maxPort)
-	validChans := make([]<- chan int, 1024)
-	for i := 0; i < 1024; i ++ {
-		validChans[i] = scanPorts(host, allPorts)
-	}
-	return pipeline.MergeInts(validChans...)
 }
